@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>เครื่องเล่นวิดีโอ</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;600&display=swap">
+<style>
+:root{
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  --bg:#f5f6f8;--card:#fff;--text:#1b1d21;--muted:#6b7280;--border:#d9dce1;
+  --accent:#4f46e5;--accent-text:#fff;--danger:#dc2626;--drop:#eef0ff;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#101216;--card:#1a1d23;--text:#eceef2;--muted:#9aa1ad;--border:#2e333c;
+    --accent:#818cf8;--accent-text:#101216;--danger:#f87171;--drop:#22263a;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#101216;--card:#1a1d23;--text:#eceef2;--muted:#9aa1ad;--border:#2e333c;
+  --accent:#818cf8;--accent-text:#101216;--danger:#f87171;--drop:#22263a;
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:inherit}
+body{margin:0;background:var(--bg);color:var(--text);font-family:"Noto Sans Thai",system-ui,-apple-system,"Segoe UI",sans-serif;min-height:100vh}
+main{max-width:900px;margin:0 auto;padding:24px 16px 40px}
+h1{font-size:1.4rem;margin:0 0 16px}
+.stage{width:100%;aspect-ratio:16/9;background:#000;border-radius:14px;overflow:hidden;position:relative;border:1px solid var(--border)}
+video{width:100%;height:100%;object-fit:contain;display:block;background:#000}
+.drop{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;text-align:center;padding:16px;background:var(--drop);color:var(--text);cursor:pointer;border:2px dashed var(--accent);border-radius:14px}
+.drop.over{background:var(--card)}
+.drop svg{width:44px;height:44px;stroke:var(--accent)}
+.drop small{color:var(--muted)}
+.hidden{display:none!important}
+.bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:14px}
+button{font:inherit;border:1px solid var(--border);background:var(--card);color:var(--text);padding:10px 16px;border-radius:10px;cursor:pointer;display:inline-flex;align-items:center;gap:8px}
+button:hover:not(:disabled){border-color:var(--accent)}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.on{background:var(--accent);color:var(--accent-text);border-color:var(--accent)}
+button.danger{color:var(--danger)}
+button svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.name{margin-top:12px;color:var(--muted);font-size:.9rem;word-break:break-all}
+.err{color:var(--danger);margin-top:10px;font-size:.9rem}
+</style>
+</head>
+<body>
+<main>
+  <h1>เครื่องเล่นวิดีโอ</h1>
+
+  <div class="stage">
+    <video id="video" controls playsinline class="hidden"></video>
+    <div class="drop" id="drop" tabindex="0" role="button" aria-label="อัปโหลดวิดีโอ">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></svg>
+      <strong>คลิกเพื่อเลือกวิดีโอ หรือลากไฟล์มาวางที่นี่</strong>
+      <small>รองรับไฟล์วิดีโอที่เบราว์เซอร์เล่นได้ เช่น MP4, WebM</small>
+    </div>
+  </div>
+
+  <div class="bar">
+    <button id="loopBtn" aria-pressed="false" disabled>
+      <svg viewBox="0 0 24 24"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/></svg>
+      <span id="loopTxt">เล่นวนซ้ำ: ปิด</span>
+    </button>
+    <button id="replaceBtn" disabled>
+      <svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg>
+      เปลี่ยนวิดีโอ
+    </button>
+    <button id="removeBtn" class="danger" disabled>
+      <svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>
+      ลบวิดีโอ
+    </button>
+  </div>
+
+  <div class="name" id="name"></div>
+  <div class="err" id="err"></div>
+  <input type="file" id="file" accept="video/*" class="hidden">
+</main>
+
+<script>
+(function(){
+  var video=document.getElementById('video');
+  var drop=document.getElementById('drop');
+  var fileInput=document.getElementById('file');
+  var loopBtn=document.getElementById('loopBtn');
+  var loopTxt=document.getElementById('loopTxt');
+  var replaceBtn=document.getElementById('replaceBtn');
+  var removeBtn=document.getElementById('removeBtn');
+  var nameEl=document.getElementById('name');
+  var errEl=document.getElementById('err');
+  var currentUrl=null;
+  var loop=false;
+
+  function setLoop(v){
+    loop=v;
+    video.loop=v;
+    loopBtn.classList.toggle('on',v);
+    loopBtn.setAttribute('aria-pressed',String(v));
+    loopTxt.textContent='เล่นวนซ้ำ: '+(v?'เปิด':'ปิด');
+  }
+
+  function clearVideo(){
+    video.pause();
+    video.removeAttribute('src');
+    video.load();
+    if(currentUrl){URL.revokeObjectURL(currentUrl);currentUrl=null;}
+    video.classList.add('hidden');
+    drop.classList.remove('hidden');
+    loopBtn.disabled=replaceBtn.disabled=removeBtn.disabled=true;
+    nameEl.textContent='';
+    errEl.textContent='';
+  }
+
+  function loadFile(f){
+    errEl.textContent='';
+    if(!f)return;
+    if(f.type.indexOf('video/')!==0){
+      errEl.textContent='ไฟล์นี้ไม่ใช่วิดีโอ กรุณาเลือกไฟล์วิดีโออีกครั้ง';
+      return;
+    }
+    if(currentUrl)URL.revokeObjectURL(currentUrl);
+    currentUrl=URL.createObjectURL(f);
+    video.src=currentUrl;
+    video.loop=loop;
+    video.classList.remove('hidden');
+    drop.classList.add('hidden');
+    loopBtn.disabled=replaceBtn.disabled=removeBtn.disabled=false;
+    nameEl.textContent='ไฟล์: '+f.name;
+    video.play().catch(function(){});
+  }
+
+  video.addEventListener('error',function(){
+    errEl.textContent='เบราว์เซอร์เล่นไฟล์นี้ไม่ได้ ลองใช้ไฟล์ MP4 (H.264) หรือ WebM';
+  });
+
+  drop.addEventListener('click',function(){fileInput.click();});
+  drop.addEventListener('keydown',function(e){
+    if(e.key==='Enter'||e.key===' '){e.preventDefault();fileInput.click();}
+  });
+  replaceBtn.addEventListener('click',function(){fileInput.click();});
+  removeBtn.addEventListener('click',clearVideo);
+  loopBtn.addEventListener('click',function(){setLoop(!loop);});
+  fileInput.addEventListener('change',function(){
+    loadFile(fileInput.files[0]);
+    fileInput.value='';
+  });
+
+  var stage=document.querySelector('.stage');
+  ['dragenter','dragover'].forEach(function(t){
+    stage.addEventListener(t,function(e){e.preventDefault();drop.classList.add('over');});
+  });
+  ['dragleave','drop'].forEach(function(t){
+    stage.addEventListener(t,function(e){e.preventDefault();drop.classList.remove('over');});
+  });
+  stage.addEventListener('drop',function(e){
+    var f=e.dataTransfer&&e.dataTransfer.files[0];
+    loadFile(f);
+  });
+})();
+</script>
+</body>
+</html>
